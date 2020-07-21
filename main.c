@@ -5,7 +5,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define BUFFER_MAX_SIZE (1024 * 1024 * 8)
+#define HIGH_WATER_MARK (1024 * 1024 * 4)
+#define LOW_WATER_MARK  (1024 * 1024 * 1)
 
 static struct buffer send_buf;
 
@@ -20,7 +21,7 @@ static void die(const char *s)
 
 static void usage(const char *name)
 {
-    fprintf(stderr, "%s ip\n", name);
+    fprintf(stderr, "usage: %s ip port\n", name);
     exit(1);
 }
 
@@ -40,7 +41,7 @@ static void stdin_cb(struct ev_loop *loop, ev_io *w, int revents)
         buffer_append_data(&send_buf, buf, nread);
         ev_io_start(loop, &socket_watcher);
 
-        if (buffer_size(&send_buf) > BUFFER_MAX_SIZE)
+        if (buffer_length(&send_buf) > HIGH_WATER_MARK)
             ev_io_stop(loop, w);
         break;
     }
@@ -50,22 +51,17 @@ static void socket_cb(struct ev_loop *loop, ev_io *w, int revents)
 {
     ssize_t nwritten;
 
-    printf("buffer len: %zu\n", buffer_length(&send_buf));
-    printf("buffer size: %zu\n", buffer_size(&send_buf));
-    printf("buffer room: %zu\n", buffer_room(&send_buf));
-
     nwritten = write(w->fd, buffer_data(&send_buf), buffer_length(&send_buf));
     if (nwritten == -1)
         die("write socket");
 
-    printf("buffer drain: %zd\n", nwritten);
-
     buffer_drain(&send_buf, nwritten);
-    if (buffer_length(&send_buf) == 0) {
-        ev_io_stop(loop, &socket_watcher);
-        buffer_reclaim(&send_buf);
+
+    if (buffer_length(&send_buf) < LOW_WATER_MARK)
         ev_io_start(loop, &stdin_watcher);
-    }
+
+    if (buffer_length(&send_buf) == 0)
+        ev_io_stop(loop, &socket_watcher);
 }
 
 int main(int argc, char *argv[])
@@ -73,10 +69,10 @@ int main(int argc, char *argv[])
     struct ev_loop *loop;
     int connfd;
 
-    if (argc != 2)
+    if (argc != 3)
         usage(argv[0]);
 
-    connfd = dial_tcp(argv[1], 9999);
+    connfd = dial_tcp(argv[1], atoi(argv[2]));
     if (connfd == -1)
         die("dial_tcp");
 

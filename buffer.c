@@ -1,8 +1,19 @@
 #include "buffer.h"
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static inline void *xrealloc(void *ptr, size_t size)
+{
+    void *p = realloc(ptr, size);
+    if (!p) {
+        fprintf(stderr, "realloc(%p, %zu): out of memory\n", ptr, size);
+        exit(1);
+    }
+    return p;
+}
 
 static inline size_t buffer_headroom(const struct buffer *buf)
 {
@@ -24,17 +35,11 @@ static inline void move_data(struct buffer *buf)
     buf->tail = buf->data + data_len;
 }
 
-static void grow_if_needed(struct buffer *buf, size_t len)
+static void buffer_grow(struct buffer *buf, size_t len)
 {
     size_t size, new_size, data_len;
 
-    if (buffer_tailroom(buf) >= len)
-        return;
-    if (buffer_headroom(buf) > 0) {
-        move_data(buf);
-        if (buffer_tailroom(buf) >= len)
-            return;
-    }
+    assert(buf->head == buf->data);
 
     size = buffer_size(buf) + len;
     new_size = 1024;
@@ -42,10 +47,24 @@ static void grow_if_needed(struct buffer *buf, size_t len)
         new_size <<= 1;
 
     data_len = buffer_length(buf);
-    buf->head = realloc(buf->head, new_size);
+    buf->head = xrealloc(buf->head, new_size);
     buf->data = buf->head;
     buf->tail = buf->data + data_len;
     buf->end = buf->head + new_size;
+}
+
+static void grow_if_needed(struct buffer *buf, size_t len)
+{
+    if (buffer_tailroom(buf) >= len)
+        return;
+
+    if (buffer_headroom(buf) > 0) {
+        move_data(buf);
+        if (buffer_tailroom(buf) >= len)
+            return;
+    }
+
+    buffer_grow(buf, len);
 }
 
 void buffer_init(struct buffer *buf)
@@ -69,11 +88,6 @@ size_t buffer_size(const struct buffer *buf)
     return buf->end - buf->head;
 }
 
-size_t buffer_room(const struct buffer *buf)
-{
-    return buffer_headroom(buf) + buffer_tailroom(buf);
-}
-
 unsigned char *buffer_data(const struct buffer *buf)
 {
     return buf->data;
@@ -91,6 +105,12 @@ void buffer_append_zero(struct buffer *buf, size_t len)
     char data[len];
     memset(data, 0, len);
     buffer_append_data(buf, data, len);
+}
+
+void buffer_append_null(struct buffer *buf)
+{
+    char null = '\0';
+    buffer_append_data(buf, &null, 1);
 }
 
 void buffer_append_char(struct buffer *buf, char c)
@@ -125,16 +145,6 @@ void buffer_drain(struct buffer *buf, size_t len)
 void buffer_reset(struct buffer *buf)
 {
     buf->data = buf->tail = buf->head;
-}
-
-void buffer_reclaim(struct buffer *buf)
-{
-    size_t data_len;
-
-    move_data(buf);
-    data_len = buffer_length(buf);
-    buf->head = buf->data = realloc(buf->head, data_len);
-    buf->end = buf->tail = buf->head + data_len;
 }
 
 void buffer_hexdump(const struct buffer *buf)
