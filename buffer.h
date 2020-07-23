@@ -18,7 +18,6 @@ size_t buffer_size(const struct buffer *buf);
 unsigned char *buffer_data(const struct buffer *buf);
 
 void buffer_append_data(struct buffer *buf, const void *data, size_t len);
-void buffer_append_zero(struct buffer *buf, size_t len);
 void buffer_append_null(struct buffer *buf);
 void buffer_append_char(struct buffer *buf, char c);
 void buffer_append_printf(struct buffer *buf, const char *fmt, ...);
