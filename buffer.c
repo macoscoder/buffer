@@ -100,13 +100,6 @@ void buffer_append_data(struct buffer *buf, const void *data, size_t len)
     buf->tail += len;
 }
 
-void buffer_append_zero(struct buffer *buf, size_t len)
-{
-    char data[len];
-    memset(data, 0, len);
-    buffer_append_data(buf, data, len);
-}
-
 void buffer_append_null(struct buffer *buf)
 {
     char null = '\0';
