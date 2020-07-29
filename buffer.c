@@ -55,11 +55,11 @@ static void buffer_grow(struct buffer *buf, size_t len)
 
 static void grow_if_needed(struct buffer *buf, size_t len)
 {
-    if (buffer_tailroom(buf) >= len)
-        return;
+    goto inside;
 
-    if (buffer_headroom(buf) > 0) {
+    while (buffer_headroom(buf) > 0) {
         move_data(buf);
+    inside:
         if (buffer_tailroom(buf) >= len)
             return;
     }
